@@ -1090,57 +1090,52 @@ def update_panorama_infos(pkl_path, out_dir):
         print(f'Warning, you may overwriting '
               f'the original data {pkl_path}.')
         time.sleep(5)
-    METAINFO = {
-        'classes': ('ceiling', 'floor', 'wall', 'beam', 'column', 'window', 'door',
-            'table', 'chair', 'sofa', 'bookcase', 'board', 'clutter')
-    }
+    METAINFO = {'classes': ('table', 'chair', 'sofa', 'bookcase', 'board')}
     print(f'Reading from input file: {pkl_path}.')
     data_list = mmengine.load(pkl_path)
     print('Start updating:')
     converted_list = []
-    for ori_info_dict in mmengine.track_iter_progress(data_list):
+    for i, ori_info_dict in enumerate(mmengine.track_iter_progress(data_list)):
         temp_data_info = get_empty_standard_data_info()
-        # temp_data_info['lidar_points']['num_pts_feats'] = ori_info_dict[
-        #     'point_cloud']['num_features']
-        # temp_data_info['lidar_points']['lidar_path'] = Path(
-        #     ori_info_dict['pts_path']).name
-        # calib = ori_info_dict['calib']
-        # rt_mat = calib['Rt']
-        # # follow Coord3DMode.convert_point
-        # rt_mat = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]
-        #                    ]) @ rt_mat.transpose(1, 0)
-        # depth2img = calib['K'] @ rt_mat
-        # temp_data_info['images']['CAM0']['depth2img'] = depth2img.tolist()
-        temp_data_info['images']['img_path'] = Path(
-            ori_info_dict['image']['image_path']).name
-        h, w = ori_info_dict['image']['image_shape']
-        temp_data_info['images']['height'] = h
-        temp_data_info['images']['width'] = w
-
+        temp_data_info['sample_idx'] = i
+        temp_data_info['lidar_points']['num_pts_feats'] = ori_info_dict[
+            'point_cloud']['num_features']
+        temp_data_info['lidar_points']['lidar_path'] = Path(
+            ori_info_dict['pts_path']).name
+        if 'pts_semantic_mask_path' in ori_info_dict:
+            temp_data_info['pts_semantic_mask_path'] = Path(
+                ori_info_dict['pts_semantic_mask_path']).name
+        if 'pts_instance_mask_path' in ori_info_dict:
+            temp_data_info['pts_instance_mask_path'] = Path(
+                ori_info_dict['pts_instance_mask_path']).name
+        temp_data_info["images"]=ori_info_dict["images"]
+        temp_data_info["depth"]=ori_info_dict["depth"]
+        #接下来加入图片和深度图
+        # TODO support camera
+        # np.linalg.inv(info['axis_align_matrix'] @ extrinsic): depth2cam
         anns = ori_info_dict.get('annos', None)
+        ignore_class_name = set()
         if anns is not None:
-            # if anns['gt_num'] == 0:
-            #     instance_list = []
-            # else:
-            num_instances = len(anns['name'])
-            ignore_class_name = set()
-            instance_list = []
-            for instance_id in range(num_instances):
-                empty_instance = get_empty_instance()
-                empty_instance['label_cor'] = anns['label_cor'][
-                    instance_id].tolist()
-                # empty_instance['bbox'] = anns['bbox'][instance_id].tolist()
-                # if anns['name'][instance_id] in METAINFO['classes']:
-                #      empty_instance['bbox_label_3d'] = METAINFO[
-                #          'classes'].index(anns['name'][instance_id])
-                #      empty_instance['bbox_label'] = empty_instance[
-                #          'bbox_label_3d']
-                # else:
-                #     ignore_class_name.add(anns['name'][instance_id])
-                #     empty_instance['bbox_label_3d'] = -1
-                #     empty_instance['bbox_label'] = -1
-                empty_instance = clear_instance_unused_keys(empty_instance)
-                instance_list.append(empty_instance)
+            if anns['gt_num'] == 0:
+                instance_list = []
+            else:
+                num_instances = len(anns['class'])
+                instance_list = []
+                for instance_id in range(num_instances):
+                    empty_instance = get_empty_instance()
+                    empty_instance['bbox_3d'] = anns['gt_boxes_upright_depth'][
+                        instance_id].tolist()
+
+                    if anns['class'][instance_id] < len(METAINFO['classes']):
+                        empty_instance['bbox_label_3d'] = anns['class'][
+                            instance_id]
+                    else:
+                        ignore_class_name.add(
+                            METAINFO['classes'][anns['class'][instance_id]])
+                        empty_instance['bbox_label_3d'] = -1
+
+                    empty_instance = clear_instance_unused_keys(empty_instance)
+                    instance_list.append(empty_instance)
             temp_data_info['instances'] = instance_list
         temp_data_info, _ = clear_data_info_unused_keys(temp_data_info)
         converted_list.append(temp_data_info)
@@ -1161,6 +1156,8 @@ def update_panorama_infos(pkl_path, out_dir):
     converted_data_info = dict(metainfo=metainfo, data_list=converted_list)
 
     mmengine.dump(converted_data_info, out_path, 'pkl')
+
+
 def generate_kitti_camera_instances(ori_info_dict):
 
     cam_key = 'CAM2'
@@ -1224,6 +1221,8 @@ def update_pkl_infos(dataset, out_dir, pkl_path):
         update_nuscenes_infos(pkl_path=pkl_path, out_dir=out_dir)
     elif dataset.lower() == 's3dis':
         update_s3dis_infos(pkl_path=pkl_path, out_dir=out_dir)
+    elif dataset.lower() =="panorama":
+        update_panorama_infos(pkl_path=pkl_path,out_dir=out_dir)
     else:
         raise NotImplementedError(f'Do not support convert {dataset} to v2.')
 
