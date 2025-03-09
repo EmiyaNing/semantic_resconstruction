@@ -7,7 +7,7 @@ import numpy as np
 from .s3dis_data_utils import S3DISData, S3DISSegData
 from .scannet_data_utils import (ScanNetData,ScanNetSegData)
 from .sunrgbd_data_utils import SUNRGBDData
-from .panorama_data_utils import PanoramaData
+from .panorama_data_utils import PanoramaData,PanoramaSegData
 
 def create_indoor_info_file(data_path,
                             pkl_prefix='sunrgbd',
@@ -35,7 +35,7 @@ def create_indoor_info_file(data_path,
     assert os.path.exists(save_path)
 
     # generate infos for both detection and segmentation task
-    if pkl_prefix in ['sunrgbd', 'scannet','panorama']:
+    if pkl_prefix in ['sunrgbd', 'scannet']:
         train_filename = os.path.join(save_path,
                                       f'{pkl_prefix}_infos_train.pkl')
         val_filename = os.path.join(save_path, f'{pkl_prefix}_infos_val.pkl')
@@ -52,11 +52,12 @@ def create_indoor_info_file(data_path,
             test_dataset = ScanNetData(root_path=data_path, split='test')
             test_filename = os.path.join(save_path,
                                        f'{pkl_prefix}_infos_test.pkl')
-        else:
-            train_dataset =PanoramaData(
-                root_path=data_path, split='train', use_v1=use_v1)
-            val_dataset = PanoramaData(
-                root_path=data_path, split='val', use_v1=use_v1)
+        # else:
+        #     train_dataset =PanoramaData(
+        #         root_path=data_path, split='train', use_v1=use_v1)
+        #     val_dataset = PanoramaData(
+        #         root_path=data_path, split='val', use_v1=use_v1)
+
         infos_train = train_dataset.get_infos(
             num_workers=workers, has_label=True)
         mmengine.dump(infos_train, train_filename, 'pkl')
@@ -114,4 +115,19 @@ def create_indoor_info_file(data_path,
                 num_points=4096,
                 label_weight_func=lambda x: 1.0 / np.log(1.2 + x))
             seg_dataset.get_seg_infos()
-
+    elif pkl_prefix=="panorama":
+        splits = [f'Area_{i}' for i in [1, 2, 3, 4, 5, 6]]
+        for split in splits:
+            dataset = PanoramaData(root_path=data_path, split=split)
+            info = dataset.get_infos(num_workers=workers, has_label=True)
+            filename = os.path.join(save_path,
+                                    f'{pkl_prefix}_infos_{split}.pkl')
+            mmengine.dump(info, filename, 'pkl')
+            print(f'{pkl_prefix} info {split} file is saved to {filename}')
+            seg_dataset = PanoramaSegData(
+                data_root=data_path,
+                ann_file=filename,
+                split=split,
+                num_points=4096,
+                label_weight_func=lambda x: 1.0 / np.log(1.2 + x))
+            seg_dataset.get_seg_infos()
