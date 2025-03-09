@@ -165,10 +165,8 @@ def sunrgbd_data_prep(root_path, info_prefix, out_dir, workers):
     info_val_path = osp.join(out_dir, f'{info_prefix}_infos_val.pkl')
     update_pkl_infos('sunrgbd', out_dir=out_dir, pkl_path=info_train_path)
     update_pkl_infos('sunrgbd', out_dir=out_dir, pkl_path=info_val_path)
-
-
 def panorama_data_prep(root_path, info_prefix, out_dir, workers):
-    """Prepare the info file for s3dis dataset.
+    """Prepare the info file for sunrgbd dataset.
 
     Args:
         root_path (str): Path of dataset root.
@@ -178,10 +176,10 @@ def panorama_data_prep(root_path, info_prefix, out_dir, workers):
     """
     indoor.create_indoor_info_file(
         root_path, info_prefix, out_dir, workers=workers)
-    info_train_path = osp.join(out_dir, f'{info_prefix}_infos_train.pkl')
-    info_val_path = osp.join(out_dir, f'{info_prefix}_infos_val.pkl')
-    update_pkl_infos('panorama', out_dir=out_dir, pkl_path=info_train_path)
-    update_pkl_infos('panorama', out_dir=out_dir, pkl_path=info_val_path)
+    splits = [f'Area_{i}' for i in [1, 2, 3, 4, 5, 6]]
+    for split in splits:
+        filename = osp.join(out_dir, f'{info_prefix}_infos_{split}.pkl')
+        update_pkl_infos('panorama', out_dir=out_dir, pkl_path=filename)
 
 def waymo_data_prep(root_path,
                     info_prefix,
@@ -281,11 +279,11 @@ def semantickitti_data_prep(info_prefix, out_dir):
 
 
 parser = argparse.ArgumentParser(description='Data converter arg parser')
-parser.add_argument('--dataset', default="panorama",metavar='kitti', help='name of the dataset')
+parser.add_argument('--dataset', default="s3dis",metavar='kitti', help='name of the dataset')
 parser.add_argument(
     '--root-path',
     type=str,
-    default='/autodl-fs/data/mmdetection3d/data/s3dis/panorama',
+    default='E:\mmdetection3d\data\s3dis',
     help='specify the root path of dataset')
 parser.add_argument(
     '--version',
@@ -306,10 +304,10 @@ parser.add_argument(
 parser.add_argument(
     '--out-dir',
     type=str,
-    default='/autodl-fs/data/mmdetection3d/data/s3dis/panorama',
+    default='E:\mmdetection3d\data\s3dis',
     required=False,
     help='name of info pkl')
-parser.add_argument('--extra-tag', type=str, default='panorama')
+parser.add_argument('--extra-tag', type=str, default='s3dis')
 parser.add_argument(
     '--workers', type=int, default=1, help='number of threads to be used')
 parser.add_argument(
