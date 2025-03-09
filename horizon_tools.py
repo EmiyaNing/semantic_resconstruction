@@ -1,22 +1,17 @@
-import os
+## python内置的包在最上端进行import
 import sys
-import glob
-import json
-import argparse
+
+## 放在第二的是 import整个包的代码
+import torch
 import numpy as np
-from PIL import Image
-from tqdm import tqdm
+
+## 放在第三的是 使用from关键字从第三方包中导入某个function或者class的代码
 from scipy.ndimage.filters import maximum_filter
 from shapely.geometry import Polygon
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from model import HorizonNet
+## 放在最后import的代码是本代码库中实现的代码
 from dataset import visualize_a_data
-from misc import post_proc, panostretch, utils
-
+from misc import post_proc
 
 def find_N_peaks(signal, r=29, min_v=0.05, N=None):
     max_v = maximum_filter(signal, size=r, mode='wrap')
@@ -44,7 +39,7 @@ def augment(x_img, flip, rotate):
 
 
 def augment_undo(x_imgs_augmented, aug_type):
-    x_imgs_augmented = x_imgs_augmented.cpu().numpy()
+    x_imgs_augmented = x_imgs_augmented.detach().cpu().numpy()
     sz = x_imgs_augmented.shape[0] // len(aug_type)
     x_imgs = []
     for i, aug in enumerate(aug_type):
@@ -75,7 +70,9 @@ def inference(net, x, device, flip=False, rotate=[], visualize=False,
 
     # Network feedforward (with testing augmentation)
     x, aug_type = augment(x, flip, rotate)
-    y_bon_, y_cor_ = net(x.to(device))
+    inputs = dict()
+    inputs['imgs'] = x.to(device)
+    y_bon_, y_cor_ = net(inputs)
     y_bon_ = augment_undo(y_bon_.cpu(), aug_type).mean(0)
     y_cor_ = augment_undo(torch.sigmoid(y_cor_).cpu(), aug_type).mean(0)
 
@@ -139,85 +136,3 @@ def inference(net, x, device, flip=False, rotate=[], visualize=False,
     cor_id[:, 1] /= H
 
     return cor_id, z0, z1, vis_out
-
-
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--pth', default="resnet50_rnn__mp3d.pth",
-                        help='path to load saved checkpoint.')
-    parser.add_argument('--img_glob',default="assets/preprocessed/camera_1b329c346b4e4b62b07e2796bd506eee_office_30_frame_equirectangular_domain_rgb_aligned_rgb.png",
-                        help='NOTE: Remeber to quote your glob path. '
-                             'All the given images are assumed to be aligned'
-                             'or you should use preporcess.py to do so.')
-    parser.add_argument('--output_dir', default="assets/inferenced")
-    parser.add_argument('--visualize', default=True,action='store_true')
-    # Augmentation related
-    parser.add_argument('--flip', action='store_true',
-                        help='whether to perfome left-right flip. '
-                             '# of input x2.')
-    parser.add_argument('--rotate', nargs='*', default=[], type=float,
-                        help='whether to perfome horizontal rotate. '
-                             'each elements indicate fraction of image width. '
-                             '# of input xlen(rotate).')
-    # Post-processing realted
-    parser.add_argument('--r', default=0.05, type=float)
-    parser.add_argument('--min_v', default=None, type=float)
-    parser.add_argument('--force_cuboid', action='store_true')
-    parser.add_argument('--force_raw', action='store_true')
-    # Misc arguments
-    parser.add_argument('--no_cuda', action='store_true',
-                        help='disable cuda')
-    args = parser.parse_args()
-
-    # Prepare image to processed
-    paths = sorted(glob.glob(args.img_glob))
-    if len(paths) == 0:
-        print('no images found')
-    for path in paths:
-        assert os.path.isfile(path), '%s not found' % path
-
-    # Check target directory
-    if not os.path.isdir(args.output_dir):
-        print('Output directory %s not existed. Create one.' % args.output_dir)
-        os.makedirs(args.output_dir)
-    device = torch.device('cpu' if args.no_cuda else 'cuda')
-
-    # Loaded trained model
-    net = utils.load_trained_model(HorizonNet, args.pth).to(device)
-    net.eval()
-
-    # Inferencing
-    with torch.no_grad():
-        for i_path in tqdm(paths, desc='Inferencing'):
-            k = os.path.split(i_path)[-1][:-4]
-
-            # Load image
-            img_pil = Image.open(i_path)
-            if img_pil.size != (1024, 512):
-                img_pil = img_pil.resize((1024, 512), Image.BICUBIC)
-            img_ori = np.array(img_pil)[..., :3].transpose([2, 0, 1]).copy()
-            x = torch.FloatTensor([img_ori / 255])
-
-            # Inferenceing corners
-            cor_id, z0, z1, vis_out = inference(net=net, x=x, device=device,
-                                                flip=args.flip, rotate=args.rotate,
-                                                visualize=args.visualize,
-                                                force_cuboid=args.force_cuboid,
-                                                force_raw=args.force_raw,
-                                                min_v=args.min_v, r=args.r)
-
-            # Output result
-            with open(os.path.join(args.output_dir, k + '.json'), 'w') as f:
-                json.dump({
-                    'z0': float(z0),
-                    'z1': float(z1),
-                    'uv': [[float(u), float(v)] for u, v in cor_id],
-                }, f)
-
-            if vis_out is not None:
-                vis_path = os.path.join(args.output_dir, k + '.raw.png')
-                vh, vw = vis_out.shape[:2]
-                Image.fromarray(vis_out)\
-                     .resize((vw//2, vh//2), Image.LANCZOS)\
-                     .save(vis_path)
