@@ -27,8 +27,27 @@ data = np.array(data)
 # data = np.load("E:\mmdetection3d\data\s3dis\Stanford3dDataset_v1.2_Aligned_Version\Area_1\conferenceRoom_1\conferenceRoom_1.txt")
 points = data[:, :3]  # 点云坐标
 colors = data[:, 3:]
-xyz_min = np.amin(points, axis=0)
-xyz_max = np.amax(points, axis=0)
+with open("E:\mmdetection3d\data\s3dis\Stanford3dDataset_v1.2_Aligned_Version\Area_2\conferenceRoom_1\Annotations\chair_6.txt", 'r') as file:
+    lines = file.readlines()
+# 解析点云数据
+item = []
+for line in lines:
+    # 移除行尾的换行符并分割字符串
+    parts = line.strip().split()
+    # 将字符串转换为浮点数
+    point = [float(part) for part in parts]
+    item.append(point)
+item = np.array(item)
+# data = np.load("E:\mmdetection3d\data\s3dis\Stanford3dDataset_v1.2_Aligned_Version\Area_1\conferenceRoom_1\conferenceRoom_1.txt")
+points_item = item[:, :3]  # 点云坐标
+colors_item = item[:, 3:]
+indices=[]
+for i, item in enumerate(points):
+    if np.any(np.all(item == points_item, axis=1)):
+        indices.append(i)
+colors[indices]=(100.0,200.0,100.0)
+# xyz_min = np.amin(points, axis=0)
+# xyz_max = np.amax(points, axis=0)
 # print(xyz_min,xyz_max)
 # pcd = op.geometry.PointCloud()
 # pcd.points = op.utility.Vector3dVector(points)
@@ -172,3 +191,19 @@ pcd_transformed = op.geometry.PointCloud()
 pcd_transformed.points = op.utility.Vector3dVector(transformed_point_cloud)
 pcd_transformed.colors = op.utility.Vector3dVector(colors / 255.)
 op.visualization.draw_geometries([pcd_transformed],window_name="1")
+#可视化物体
+# point_cloud_homogeneous_item = np.hstack((points_item, np.ones((points_item.shape[0], 1))))
+# # 应用变换矩阵
+# transformed_point_cloud_item = np.dot(camera_rotate_matrix, point_cloud_homogeneous_item.T).T
+# # colors_item[:]=(100.0,200.0,100.0)
+# # 转换回 N*3 格式
+# transformed_point_cloud_item = transformed_point_cloud_item[:, :3]
+# transformed_point_cloud[:,1] =-transformed_point_cloud[:,1]
+# transformed_xyz_min_item = np.amin(transformed_point_cloud, axis=0)
+# transformed_xyz_max_item = np.amax(transformed_point_cloud, axis=0)
+# pcd_transformed_item = op.geometry.PointCloud()
+# pcd_transformed_item.points = op.utility.Vector3dVector(transformed_point_cloud_item)
+# pcd_transformed_item.colors = op.utility.Vector3dVector(colors_item/255.0)
+# op.visualization.draw_geometries([pcd_transformed_item],window_name="1")
+
+
